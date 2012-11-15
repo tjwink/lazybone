@@ -24,6 +24,7 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 import android.support.v4.app.NavUtils;
 
 public class MainActivity extends LazyActivity implements OnItemClickListener{
@@ -53,10 +54,19 @@ public class MainActivity extends LazyActivity implements OnItemClickListener{
         Intent intent = new Intent(this, TestFragmentActivity.class);
         intent.putExtra("test", num);
         intent.putExtra("text", "测试");
+        //测试传递序列化对象
         Book book = new Book();
         book.setAuthor("张志远");
         intent.putExtra("book", book);
-        startActivity(intent);
+        //测试ORM
+        TestDAO dao = new TestDAO(this);
+        TestDto test = new TestDto();
+        test.setName("黄河");
+        test.setNum(3);
+        dao.save(test);
+        test = dao.findObjectById(test.getSqliteId());
+        Toast.makeText(this, test.getName()+test.getNum(), Toast.LENGTH_LONG).show();
+//        startActivity(intent);
     }
 
 

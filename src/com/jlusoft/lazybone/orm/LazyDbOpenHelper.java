@@ -1,4 +1,4 @@
-package com.jlusoft.orm;
+package com.jlusoft.lazybone.orm;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
@@ -15,7 +15,7 @@ import android.database.sqlite.SQLiteOpenHelper;
 import android.provider.BaseColumns;
 import android.util.Log;
 
-public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper implements DataBaseConstants,
+public abstract class LazyDbOpenHelper<T extends LazyDto> extends SQLiteOpenHelper implements 
 		BaseColumns {
 
 	/**
@@ -24,16 +24,16 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	 * 继承本类时必须把泛型T的类确定.
 	 * 使用单例模式和工厂模式,以便关闭数据库.
 	 * 本类根据T类的成员域自动生成相应的表,并提供基础的数据库操作方法 
-	 * 因为并不是所有域都需要保存到数据库中,所以
-	 * 要在保存的域的名字中加上"C_",如:
-	 * private String C_Name;
+	 * 并不是所有域都需要保存到数据库中
+	 * 不需要保存的成员域，需要添加@ignore注解来说明这个域不添加到数据库中，如
+	 * @ignore
+	 * private String Name;
 	 * 只能保存基本的数据类型如int,long,float等等,对象中能保存String;
-	 * 注意:Id域会自动作为主键生成数据库字段,无需添加"C_"后缀,但你需要为你的目标类添加id成员域.表中id的字段名为:"_id",你也可以继承DAOable类;
-	 * 这个类已经自动添加id字段.
-	 * DTO必须要有一个空参数的构造器
+	 * 范型Ｔ必须继承LazyDto.
 	 * 目前仅支持基本类型和String的转换,若出现其他类型,一律当无数据类型处理.
 	 * boolean类型在数据库中用integer表示.0代表假,1代表真.
-	 * 数据库中的字段名等于目标类除去后缀"C_",比如有一个成员域为private int C_points,那么该域在数据库中的字段名为points;
+	 * 数据库中的字段名等于目标域名字,比如有一个成员域为private int points,那么该域在数据库中的字段名为points;
+	 * 表名等于DTO类名的大写加上Ｓ，比如有一个User实体，那么它在数据库中的表明是USERS.
 	 * @return 字符数组
 	 */
 	
@@ -47,12 +47,12 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	private boolean isCreated;
 	private SQLiteDatabase db;
 	@SuppressWarnings("unchecked")
-	public BaseDAOHelper(Context context, String name, CursorFactory factory, int version) {
+	public LazyDbOpenHelper(Context context, String name, CursorFactory factory, int version) {
 		super(context, name, factory, version);
 		// 获得泛型T的Class对象,用于反射获得T的成员变量
 		targetClass = (Class<T>) ((ParameterizedType) getClass().getGenericSuperclass()).getActualTypeArguments()[0];
 		TableName = getTableName();
-		fields = targetClass.getDeclaredFields();
+		fields = getFields();
 		Field.setAccessible(fields, true);
 		CreateTable(context, name, factory, version);
 		columsMap = getAllColumnsMap(fields);
@@ -147,7 +147,7 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 
 	public T save(T object) {
 		
-		if (object.get_Id() == -1) {
+		if (object.getSqliteId() == -1) {
 			SQLiteDatabase db = getWritableDatabase();
 			return createNewObject(db, object);
 		} else {
@@ -172,22 +172,22 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 		}
 	}
 	
-	/**Deprecated
-	 * 主要用于排序和分页查找（排序或分页可为空）
-	 * @param where
-	 * @return cursor游标数据集
-	 */
-	public ArrayList<T> findObjectListByCondition(String orderBy,String limit) {
-		Cursor cursor = null;
-		try {
-			cursor = findCursorByOrderByLimit(orderBy, limit);
-			return findObjectListByCursor(cursor);
-		} finally {
-			if(cursor!=null){
-			cursor.close();
-			}
-		}
-	}
+//	/**Deprecated
+//	 * 主要用于排序和分页查找（排序或分页可为空）
+//	 * @param where
+//	 * @return cursor游标数据集
+//	 */
+//	public ArrayList<T> findObjectListByCondition(String orderBy,String limit) {
+//		Cursor cursor = null;
+//		try {
+//			cursor = findCursorByOrderByLimit(orderBy, limit);
+//			return findObjectListByCursor(cursor);
+//		} finally {
+//			if(cursor!=null){
+//			cursor.close();
+//			}
+//		}
+//	}
 
 	/**Deprecated
 	 * 根据SQL条件语句判断查找数据比如想查找id=1的数据,尽量使用findObjectListByCondition()
@@ -219,11 +219,11 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	}
 	
 	//分页参数，我就需要分页参数！
-	public Cursor findCursorByOrderByLimit(String orderBy,String limit){
-		SQLiteDatabase db = getReadableDatabase();
-		
-		return db.query(TableName, THIS_ALL_COLUMNS, null, null, null, null, orderBy, limit);
-	}
+//	public Cursor findCursorByOrderByLimit(String orderBy,String limit){
+//		SQLiteDatabase db = getReadableDatabase();
+//		
+//		return db.query(TableName, THIS_ALL_COLUMNS, null, null, null, null, orderBy, limit);
+//	}
 
 	public T findObjectById(int id) {
 		T object = null;
@@ -305,7 +305,7 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 		//		db.close();
 	}
 	public void deleteByEntity(T object) {
-		deleteById(object.get_Id());
+		deleteById(object.getSqliteId());
 	}
 
 	public void deleteById(int id) {
@@ -322,7 +322,7 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	public void updateObjectById(T object) {
 		SQLiteDatabase db = getWritableDatabase();
 		ContentValues cv = createContentValues(object);
-		db.update(TableName, cv, _ID + " = ?", new String[] { String.valueOf(object.get_Id()) });
+		db.update(TableName, cv, _ID + " = ?", new String[] { String.valueOf(object.getSqliteId()) });
 		//		db.close();
 	}
 
@@ -333,12 +333,33 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	//		} catch (Exception e) {
 	//		}
 	//	}
-
+	/**
+	 * 查找不含有Ignore注解的成员域
+	 */
+	private Field[] getFields(){
+		Field[] tmpFields = targetClass.getDeclaredFields();
+		ArrayList<Field> fieldlist = new ArrayList<Field>();
+		for (Field field :tmpFields){
+			if (!field.isAnnotationPresent(Ignore.class)){
+				//还需要是基本类才添加进list
+				if (field.getType() == int.class | field.getType() == long.class |
+						field.getType() == String.class | field.getType() == boolean.class
+						 | field.getType() == double.class | field.getType() == float.class){
+				fieldlist.add(field);
+				}
+			}
+		}
+		if (fieldlist.size()==0){
+			throw new RuntimeException("对象没有需要保存的成员域");
+		}
+		return  fieldlist.toArray(new Field[fieldlist.size()]);
+	}
+	/**
+	 * 如果发生异常,则返回null
+	 * T类必须有一个无参数构造器
+	 */
 	private T createObjectFromCursorData(Cursor cursor) {
-		/**
-		 * 如果发生异常,则返回null
-		 * T类必须有一个无参数构造器
-		 */
+		
 		T newobjecT = null;
 		//把id字段在THIS_ALL_COLUMNS数组中去掉
 		final String[] columns = new String[THIS_ALL_COLUMNS.length - 1];
@@ -353,7 +374,7 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 
 				}
 			//因为id这个域不在fields数组里,所以必须另外处理
-			newobjecT.set_Id(cursor.getInt(cursor.getColumnIndex(_ID)));
+			newobjecT.setSqliteId(cursor.getInt(cursor.getColumnIndex(_ID)));
 		} catch (IllegalAccessException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -392,15 +413,15 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	private T createNewObject(SQLiteDatabase db, T object) {
 		ContentValues values = createContentValues(object);
 		long id = db.insertOrThrow(TableName, null, values);
-		object.set_Id((int) id);
+		object.setSqliteId((int) id);
 		return object;
 	}
 
 	private ContentValues createContentValues(T object) {
 		ContentValues values = new ContentValues();
 		for (Field field : fields) {
-			if (field.toString().contains(IDENTIFIER)) {
-				final String columnname = field.getName().substring(IDENTIFIER.length());
+			
+				final String columnname = field.getName();
 
 				Class<?> ftype = field.getType();
 				try {
@@ -433,7 +454,7 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
-			}
+			
 		}
 		return values;
 	}
@@ -489,18 +510,19 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 		 * 该函数根据反射回来的域制造数据库字段字符,
 		 * 并根据域的类型选择数据库中的字段类型,
 		 * 因为并不是所有域都需要保存到数据库中,所以
-		 * 要在保存的域的名字中加上"C_",如:
-		 * private String C_Name;
-		 * 注意:Id域会自动作为主键生成数据库字段,无需添加"C_"后缀.
+		 * 不需要保存的域需要加上"@Ignore"注解,如:
+		 * @Ignore
+		 * private String Name;
+		 * 注意:Id域会自动作为主键生成数据库字段
 		 * 目前仅支持基本类型和String的转换,若出现其他类型,一律当无数据类型处理.
 		 * @return 字符数组
 		 */
 
 		ArrayList<String> list = new ArrayList<String>();
 		for (Field field : fields) {
-			if (field.toString().contains(IDENTIFIER)) {
-				//去掉"C_"前缀
-				final StringBuffer sb = new StringBuffer(field.getName().substring(IDENTIFIER.length()));
+			if (!field.isAnnotationPresent(Ignore.class)) {
+				
+				final StringBuffer sb = new StringBuffer(field.getName());
 				Class<?> ftype = field.getType();
 				if (ftype == int.class || ftype == long.class || ftype == short.class || ftype == boolean.class) {
 					sb.append(" INTEGER");
@@ -523,10 +545,7 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	private HashMap<String, Field> getAllColumnsMap(Field[] fields) {
 		HashMap<String, Field> columns = new HashMap<String, Field>();
 		for (int i = 0; i < fields.length; i++) {
-			if (fields[i].toString().contains(IDENTIFIER)) {
-				final String column = new String(fields[i].getName().substring(IDENTIFIER.length()));
-				columns.put(column, fields[i]);
-			}
+				columns.put(fields[i].getName(), fields[i]);
 		}
 		return columns;
 	}
@@ -534,12 +553,8 @@ public abstract class BaseDAOHelper<T extends DAOable> extends SQLiteOpenHelper 
 	private String[] getAllColumnStrings(Field[] fields) {
 
 		ArrayList<String> list = new ArrayList<String>();
-		int columnindex = 0;
 		for (int i = 0; i < fields.length; i++) {
-			//判断是否含有"C_"
-			if (fields[i].toString().contains(IDENTIFIER)) {
-				list.add(new String(fields[i].getName().substring(IDENTIFIER.length())));
-			}
+				list.add(new String(fields[i].getName()));
 		}
 		//数组最后一个元素必定是id,有些地方可能需要把id去掉.
 		list.add(_ID);
